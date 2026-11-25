@@ -98,35 +98,29 @@ struct queue_at_back {
 } // namespace trigger_mgr
 
 namespace detail {
-template <stdx::ct_string, typename task> struct tm_q {
-    static inline std::array<stdx::intrusive_list<task>, 1> tasks{};
-    // NOLINTNEXTLINE(bugprone-throwing-static-initialization)
-    static inline stdx::atomic<int> task_count{};
-};
-} // namespace detail
-
-template <typename Name, typename... Args>
-struct trigger_manager
-    : detail::tm_q<stdx::expand(Name{}), trigger_task<Args...>> {
+template <stdx::ct_string, typename... Args> struct tm_q {
     struct mutex;
     using task_t = trigger_task<Args...>;
+    static inline std::array<stdx::intrusive_list<task_t>, 1> tasks{};
+    // NOLINTNEXTLINE(bugprone-throwing-static-initialization)
+    static inline stdx::atomic<int> task_count{};
 
-    template <typename QueuePolicy> auto enqueue(task_t &t) -> bool {
+    template <typename QueuePolicy> static auto enqueue(task_t &t) -> bool {
         return conc::call_in_critical_section<mutex>([&]() -> bool {
             auto const added = not std::exchange(t.pending, true);
             if (added) {
-                ++this->task_count;
-                QueuePolicy::push(this->tasks[0], t);
+                ++task_count;
+                QueuePolicy::push(tasks[0], t);
             }
             return added;
         });
     }
 
-    auto dequeue(task_t &t) -> bool {
+    static auto dequeue(task_t &t) -> bool {
         return conc::call_in_critical_section<mutex>([&]() -> bool {
             if (std::exchange(t.pending, false)) {
-                this->tasks[0].remove(std::addressof(t));
-                --this->task_count;
+                tasks[0].remove(std::addressof(t));
+                --task_count;
                 return true;
             }
             return false;
@@ -135,18 +129,23 @@ struct trigger_manager
 
     template <typename RQP = requeue_policy::deferred,
               typename RunPolicy = run_policy::all, typename... As>
-    auto run(As &&...args) -> void {
+    static auto run(As &&...args) -> void {
         static_assert((... and std::same_as<Args, std::remove_cvref_t<As>>));
-        RunPolicy::template run<RQP, mutex>(this->tasks, this->task_count,
+        RunPolicy::template run<RQP, mutex>(tasks, task_count,
                                             std::forward<As>(args)...);
     }
 
-    template <typename RunPolicy = run_policy::all> auto cancel() -> void {
-        RunPolicy::template cancel<mutex>(this->tasks, this->task_count);
+    template <typename RunPolicy = run_policy::all>
+    static auto cancel() -> void {
+        RunPolicy::template cancel<mutex>(tasks, task_count);
     }
 
-    [[nodiscard]] auto empty() const -> bool { return this->task_count == 0; }
+    [[nodiscard]] static auto empty() -> bool { return task_count == 0; }
 };
+} // namespace detail
+
+template <typename Name, typename... Args>
+struct trigger_manager : detail::tm_q<stdx::expand(Name{}), Args...> {};
 
 template <typename Name, typename... Args>
 inline auto triggers = trigger_manager<Name, Args...>{};

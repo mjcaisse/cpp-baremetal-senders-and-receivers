@@ -9,6 +9,7 @@
 #include <conc/concurrency.hpp>
 
 #include <concepts>
+#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -41,6 +42,7 @@ concept unstoppable_token = stoppable_token<T> and requires {
 
 struct inplace_stop_source;
 template <typename F> struct inplace_stop_callback;
+template <typename F> struct never_stop_callback;
 
 template <typename Source> struct stop_token {
     template <class T> using callback_type = inplace_stop_callback<T>;
@@ -138,7 +140,7 @@ struct inplace_stop_source {
 using inplace_stop_token = stop_token<inplace_stop_source>;
 
 struct never_stop_token {
-    template <class T> using callback_type = inplace_stop_callback<T>;
+    template <class T> using callback_type = never_stop_callback<T>;
 
     [[nodiscard]] constexpr static auto stop_requested() noexcept -> bool {
         return false;
@@ -204,6 +206,23 @@ template <typename F> struct inplace_stop_callback final : stop_callback_base {
     inplace_stop_source *source{};
     F callback;
 };
+
+template <typename F> struct never_stop_callback {
+    constexpr never_stop_callback(never_stop_token, F const &) noexcept {}
+    constexpr never_stop_callback(never_stop_token, F &&) noexcept {}
+};
+
+namespace detail {
+struct no_stop_callback {
+    constexpr auto emplace(auto &&...) noexcept -> void {}
+    constexpr auto reset() noexcept -> void {}
+};
+} // namespace detail
+
+template <typename Token, typename F>
+using optional_stop_callback_t =
+    std::conditional_t<unstoppable_token<Token>, detail::no_stop_callback,
+                       std::optional<stop_callback_for_t<Token, F>>>;
 
 constexpr inline struct get_stop_token_t : forwarding_query_t {
     constexpr static auto name = stdx::ct_string{"get_stop_token"};

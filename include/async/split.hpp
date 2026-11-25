@@ -160,11 +160,12 @@ struct op_state : op_state_base<S, Uniq> {
     }
 
     using stop_callback_t =
-        stop_callback_for_t<stop_token_of_t<env_of_t<Rcvr>>, stop_callback_fn>;
+        optional_stop_callback_t<stop_token_of_t<env_of_t<Rcvr>>,
+                                 stop_callback_fn>;
 
     [[no_unique_address]] Rcvr rcvr;
     op_state_t *next_ops{};
-    std::optional<stop_callback_t> stop_cb{};
+    [[no_unique_address]] stop_callback_t stop_cb{};
 };
 
 template <typename Sndr, typename Uniq> struct sender {

@@ -306,11 +306,12 @@ struct op_state : base_op_state<Rcvr>,
     }
 
     using stop_callback_t =
-        stop_callback_for_t<stop_token_of_t<env_of_t<Rcvr>>, stop_callback_fn>;
+        optional_stop_callback_t<stop_token_of_t<env_of_t<Rcvr>>,
+                                 stop_callback_fn>;
 
     completions_t completions{};
     stdx::atomic<std::size_t> count;
-    std::optional<stop_callback_t> stop_cb{};
+    [[no_unique_address]] stop_callback_t stop_cb{};
 };
 
 template <typename Rcvr> struct nostop_base_op_state {
@@ -485,10 +486,11 @@ struct op_state<Name, StopPolicy, Rcvr> {
     }
 
     using stop_callback_t =
-        stop_callback_for_t<stop_token_of_t<env_of_t<Rcvr>>, stop_callback_fn>;
+        optional_stop_callback_t<stop_token_of_t<env_of_t<Rcvr>>,
+                                 stop_callback_fn>;
 
     [[no_unique_address]] Rcvr rcvr;
-    std::optional<stop_callback_t> stop_cb{};
+    [[no_unique_address]] stop_callback_t stop_cb{};
 };
 
 template <auto Name, typename StopPolicy> struct sender<Name, StopPolicy> {

@@ -110,9 +110,10 @@ struct op_state<Domain, Name, Duration, Rcvr, Task, ExpirationPolicy> final
         op_state *ops;
     };
     using stop_callback_t =
-        stop_callback_for_t<stop_token_of_t<env_of_t<Rcvr>>, stop_callback_fn>;
+        optional_stop_callback_t<stop_token_of_t<env_of_t<Rcvr>>,
+                                 stop_callback_fn>;
 
-    std::optional<stop_callback_t> stop_cb{};
+    [[no_unique_address]] stop_callback_t stop_cb{};
 };
 } // namespace timer_mgr
 
